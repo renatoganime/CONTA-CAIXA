@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Caixa — Ibis Budget Guarulhos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff;
+    --border: #e4e4df; --border-strong: #c8c8c0;
+    --text: #1a1a18; --text-2: #6b6b65; --text-3: #9b9b94;
+    --green-bg:#eaf3de; --green:#3b6d11; --green-bd:#9fc86a;
+    --red-bg:#fcebeb;   --red:#a32d2d;   --red-bd:#f09595;
+    --blue-bg:#e6f1fb;  --blue:#185fa5;  --blue-bd:#85b7eb;
+    --amber-bg:#faeeda; --amber:#854f0b; --amber-bd:#ef9f27;
+    --accent:#1a1a18;
+    --r:8px; --rl:12px;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  body { background:var(--bg); color:var(--text); min-height:100vh; }
+
+  header {
+    background:var(--accent); color:#fff;
+    padding:18px 28px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  header h1 { font-size:16px; font-weight:normal; letter-spacing:.02em; }
+  .header-right { display:flex; align-items:center; gap:10px; }
+  .save-indicator {
+    font-size:11px; font-family:monospace;
+    padding:4px 10px; border-radius:99px;
+    background:rgba(255,255,255,.15); color:rgba(255,255,255,.7);
+  }
+  .save-indicator.saved { background:rgba(60,180,80,.3); color:#a8f0b8; }
+
+  .container { max-width:960px; margin:0 auto; padding:24px 18px 60px; }
+
+  .top-bar {
+    display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; align-items:flex-end;
+  }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-3); font-family:monospace; }
+  .field input, .field select {
+    padding:9px 12px; border:1px solid var(--border); border-radius:var(--r);
+    font-size:14px; font-family:Georgia,serif; background:var(--bg); color:var(--text);
+    outline:none; transition:border-color .15s;
+  }
+  .field input:focus, .field select:focus { border-color:var(--border-strong); background:#fff; }
+
+  .resumo {
+    display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:18px;
+  }
+  .metric {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r); padding:12px 14px;
+  }
+  .metric .ml { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-3); font-family:monospace; margin-bottom:5px; }
+  .metric .mv { font-size:17px; font-weight:bold; }
+  .mv.green{color:var(--green);} .mv.red{color:var(--red);}
+  .mv.blue{color:var(--blue);} .mv.amber{color:var(--amber);}
+
+  .form-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--rl); padding:18px 22px; margin-bottom:18px;
+  }
+  .section-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-3); font-family:monospace; margin-bottom:12px; }
+
+  .tipo-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+  .tipo-btn {
+    padding:10px 8px; border:1.5px solid var(--border); border-radius:var(--r);
+    background:var(--surface); font-size:13px; font-family:Georgia,serif;
+    cursor:pointer; color:var(--text-2); transition:all .15s;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .tipo-btn:hover { border-color:var(--border-strong); color:var(--text); }
+  .tipo-btn.ativo-entrada  { background:var(--green-bg); border-color:var(--green-bd); color:var(--green); }
+  .tipo-btn.ativo-saida    { background:var(--red-bg);   border-color:var(--red-bd);   color:var(--red); }
+  .tipo-btn.ativo-deposito { background:var(--blue-bg);  border-color:var(--blue-bd);  color:var(--blue); }
+
+  .form-grid  { display:grid; grid-template-columns:1fr 1.6fr 1fr 1fr; gap:10px; margin-bottom:10px; }
+  .form-grid2 { display:grid; grid-template-columns:2.5fr 1fr; gap:10px; }
+
+  .btn-add {
+    padding:11px 18px; background:var(--accent); color:#fff; border:none;
+    border-radius:var(--r); font-size:14px; font-family:Georgia,serif;
+    cursor:pointer; letter-spacing:.02em; transition:opacity .15s; white-space:nowrap;
+  }
+  .btn-add:hover { opacity:.82; }
+
+  .tabela-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--rl); overflow:hidden; margin-bottom:18px;
+  }
+  .tabela-header {
+    padding:12px 18px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .tabela-header span { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-3); font-family:monospace; }
+  .tabela-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th {
+    padding:9px 12px; text-align:left;
+    font-size:11px; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--text-3); font-family:monospace; font-weight:normal;
+    border-bottom:1px solid var(--border); background:var(--bg); white-space:nowrap;
+  }
+  td {
+    padding:9px 12px; border-bottom:1px solid var(--border);
+    font-family:Georgia,serif; vertical-align:middle;
+  }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:var(--bg); }
+
+  .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-family:monospace; }
+  .badge-e{background:var(--green-bg);color:var(--green);}
+  .badge-s{background:var(--red-bg);color:var(--red);}
+  .badge-d{background:var(--blue-bg);color:var(--blue);}
+
+  .v-e{color:var(--green);font-weight:bold;text-align:right;white-space:nowrap;}
+  .v-s{color:var(--red);font-weight:bold;text-align:right;white-space:nowrap;}
+  .v-d{color:var(--blue);font-weight:bold;text-align:right;white-space:nowrap;}
+  .v-sal{font-weight:bold;text-align:right;white-space:nowrap;}
+  .td-m{color:var(--text-3);font-size:12px;font-family:monospace;}
+
+  .del-btn {
+    background:none; border:none; cursor:pointer; color:var(--text-3);
+    font-size:15px; padding:3px 5px; border-radius:4px; transition:all .15s;
+  }
+  .del-btn:hover { color:var(--red); background:var(--red-bg); }
+
+  .empty-state {
+    text-align:center; padding:44px 20px; color:var(--text-3);
+    font-size:13px; font-family:monospace; line-height:1.8;
+  }
+
+  .btn-action {
+    padding:12px; background:var(--surface); color:var(--text);
+    border:1px solid var(--border-strong); border-radius:var(--r);
+    font-size:13px; font-family:Georgia,serif; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:all .15s;
+  }
+  .btn-action:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn-action.danger:hover { background:var(--red); border-color:var(--red); }
+  .btn-backup-main {
+    padding:14px 18px; background:var(--amber); color:#fff;
+    border:1.5px solid var(--amber); border-radius:var(--r);
+    font-family:Georgia,serif; cursor:pointer;
+    display:flex; align-items:center; gap:14px; text-align:left;
+    transition:opacity .15s; width:100%;
+  }
+  .btn-backup-main:hover { opacity:.88; }
+
+  .toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:var(--accent); color:#fff; padding:10px 22px;
+    border-radius:99px; font-size:13px; font-family:monospace;
+    opacity:0; transition:opacity .3s; pointer-events:none; z-index:999;
+    white-space:nowrap;
+  }
+  .toast.show { opacity:1; }
+
+  .divider { border:none; border-top:1px solid var(--border); margin:18px 0; }
+
+  .mes-nav { display:flex; gap:6px; align-items:center; }
+  .mes-nav button {
+    padding:6px 10px; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r); font-size:13px; cursor:pointer; color:var(--text-2);
+    transition:all .15s;
+  }
+  .mes-nav button:hover { border-color:var(--border-strong); color:var(--text); }
+
+  @media(max-width:680px){
+    .resumo{grid-template-columns:1fr 1fr;}
+    .tipo-row,.form-grid,.action-bar{grid-template-columns:1fr;}
+    .form-grid{grid-template-columns:1fr 1fr;}
+    .form-grid2{grid-template-columns:1fr;}
+    header{flex-direction:column;align-items:flex-start;}
+    .top-bar{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Controle de Caixa — Ibis Budget Guarulhos Aeroporto</h1>
+  <div class="header-right">
+    <span class="save-indicator" id="save-ind">não salvo</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="top-bar">
+    <div class="field">
+      <label>Mês / Ano</label>
+      <div class="mes-nav">
+        <button onclick="mudarMes(-1)" title="Mês anterior">‹</button>
+        <input type="month" id="mes-ano" value="2026-05" style="width:140px;" onchange="trocarMes()">
+        <button onclick="mudarMes(1)" title="Próximo mês">›</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Saldo Inicial (R$)</label>
+      <input type="number" id="saldo-inicial" value="0" step="0.01" min="0" style="width:160px;" oninput="salvarDados();recalc();renderTabela();">
+    </div>
+    <div class="field">
+      <label>Hotel / Unidade</label>
+      <input type="text" id="hotel-nome" value="Ibis Budget Guarulhos Aeroporto" style="width:280px;" oninput="salvarDados()">
+    </div>
+  </div>
+
+  <div class="resumo">
+    <div class="metric"><div class="ml">Saldo inicial</div><div class="mv amber" id="c-si">R$ 0,00</div></div>
+    <div class="metric"><div class="ml">Total entradas</div><div class="mv green" id="c-ent">R$ 0,00</div></div>
+    <div class="metric"><div class="ml">Total saídas</div><div class="mv red" id="c-sai">R$ 0,00</div></div>
+    <div class="metric"><div class="ml">Total depositado</div><div class="mv blue" id="c-dep">R$ 0,00</div></div>
+    <div class="metric" style="border-color:var(--border-strong);">
+      <div class="ml">Saldo em caixa</div>
+      <div class="mv" id="c-saldo" style="color:var(--text)">R$ 0,00</div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="section-label">Novo lançamento</div>
+    <div class="tipo-row">
+      <button class="tipo-btn ativo-entrada" id="btn-entrada" onclick="setTipo('entrada',this)">↑ Entrada (RDS)</button>
+      <button class="tipo-btn" id="btn-saida" onclick="setTipo('saida',this)">↓ Saída (Pagamento)</button>
+      <button class="tipo-btn" id="btn-deposito" onclick="setTipo('deposito',this)">⇒ Depósito Banco</button>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Data</label><input type="date" id="f-data"></div>
+      <div class="field"><label>Razão Social / Descrição</label><input type="text" id="f-razao" placeholder="Ex: RDS, Taxi, VT..."></div>
+      <div class="field"><label>Nº Documento</label><input type="text" id="f-doc" placeholder="Opcional"></div>
+      <div class="field"><label id="lbl-valor">Valor (R$)</label><input type="number" id="f-valor" placeholder="0,00" step="0.01" min="0.01" onkeydown="if(event.key==='Enter')addLancamento()"></div>
+    </div>
+    <div class="form-grid2">
+      <div class="field"><label>Observação</label><input type="text" id="f-obs" placeholder="Detalhe adicional (opcional)" onkeydown="if(event.key==='Enter')addLancamento()"></div>
+      <button class="btn-add" onclick="addLancamento()">+ Adicionar</button>
+    </div>
+  </div>
+
+  <div class="tabela-card">
+    <div class="tabela-header">
+      <span>Lançamentos — <span id="mes-label">Mai/2026</span></span>
+      <span id="count-label" style="color:var(--text-3)">0 registros</span>
+    </div>
+    <div class="tabela-wrap" id="tabela-wrap">
+      <div class="empty-state">Nenhum lançamento ainda.<br>Use o formulário acima para começar.</div>
+    </div>
+  </div>
+
+  <div style="background:var(--amber-bg);border:1.5px solid var(--amber-bd);border-radius:var(--rl);padding:18px 22px;margin-bottom:14px;">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber);font-family:monospace;margin-bottom:10px;">⬇ Fechamento de turno — faça isso antes de sair</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button class="btn-backup-main" onclick="exportarBackupJSON()">
+        <span style="font-size:20px;line-height:1">💾</span>
+        <div>
+          <div style="font-size:14px;font-weight:bold">Salvar backup do turno (.json)</div>
+          <div style="font-size:11px;opacity:.75;margin-top:2px">Guarda todos os dados para continuar em outro computador</div>
+        </div>
+      </button>
+      <button class="btn-backup-main" style="background:var(--surface);color:var(--text);border-color:var(--border-strong);" onclick="exportarExcel()">
+        <span style="font-size:20px;line-height:1">📊</span>
+        <div>
+          <div style="font-size:14px;font-weight:bold">Exportar relatório Excel (.xlsx)</div>
+          <div style="font-size:11px;opacity:.6;margin-top:2px">Gera o relatório formal do mês para arquivar</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+    <button class="btn-action" onclick="document.getElementById('import-input').click()">↑ Carregar backup de outro turno (.json)</button>
+    <button class="btn-action danger" onclick="limparMes()">✕ Limpar mês atual</button>
+  </div>
+  <input type="file" id="import-input" accept=".json" style="display:none" onchange="importarBackup(event)">
+
+  <div style="text-align:center;font-size:11px;color:var(--text-3);font-family:monospace;margin-top:6px;">
+    Dados salvos automaticamente neste navegador · O backup .json permite continuar em outro computador ou turno
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'ibis_caixa_v1';
+let tipo = 'entrada';
+let dados = {};
+let mesSelecionado = '2026-05';
+let idCount = 1;
+
+function chave(mes) { return 'mes_' + mes; }
+function getMesData() { return dados[chave(mesSelecionado)] || { si: 0, lancamentos: [] }; }
+
+function salvarDados() {
+  const md = getMesData();
+  md.si    = parseFloat(document.getElementById('saldo-inicial').value) || 0;
+  md.hotel = document.getElementById('hotel-nome').value;
+  dados[chave(mesSelecionado)] = md;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+    idCount = Math.max(idCount, ...md.lancamentos.map(l=>l.id||0)) + 1;
+    mostrarIndicador(true);
+  } catch(e) {
+    mostrarIndicador(false);
+  }
+}
+
+function carregarDados() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) dados = JSON.parse(raw);
+  } catch(e) { dados = {}; }
+}
+
+function mostrarIndicador(ok) {
+  const el = document.getElementById('save-ind');
+  el.textContent = ok ? '✓ salvo automaticamente' : 'erro ao salvar';
+  el.className = 'save-indicator' + (ok ? ' saved' : '');
+}
+
+function trocarMes() {
+  mesSelecionado = document.getElementById('mes-ano').value;
+  const [ano, m] = mesSelecionado.split('-');
+  const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  document.getElementById('mes-label').textContent = nomes[parseInt(m)-1] + '/' + ano;
+  const md = getMesData();
+  document.getElementById('saldo-inicial').value = md.si || 0;
+  if (md.hotel) document.getElementById('hotel-nome').value = md.hotel;
+  idCount = md.lancamentos.length ? Math.max(...md.lancamentos.map(l=>l.id||0)) + 1 : 1;
+  recalc(); renderTabela();
+}
+
+function mudarMes(delta) {
+  const val = document.getElementById('mes-ano').value || mesSelecionado;
+  const [ano, m] = val.split('-').map(Number);
+  const d = new Date(ano, m - 1 + delta, 1);
+  const novoMes = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  document.getElementById('mes-ano').value = novoMes;
+  trocarMes();
+}
+
+function brl(v) {
+  return 'R$ ' + Math.abs(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function recalc() {
+  const si  = parseFloat(document.getElementById('saldo-inicial').value) || 0;
+  const lcs = getMesData().lancamentos || [];
+  let ent=0, sai=0, dep=0;
+  lcs.forEach(l => {
+    if      (l.tipo==='entrada')  ent += l.valor;
+    else if (l.tipo==='saida')    sai += l.valor;
+    else                          dep += l.valor;
+  });
+  const saldo = parseFloat((si + ent - sai - dep).toFixed(2));
+  document.getElementById('c-si').textContent  = brl(si);
+  document.getElementById('c-ent').textContent = brl(ent);
+  document.getElementById('c-sai').textContent = brl(sai);
+  document.getElementById('c-dep').textContent = brl(dep);
+  const cel = document.getElementById('c-saldo');
+  cel.textContent = brl(saldo);
+  cel.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function setTipo(t, btn) {
+  tipo = t;
+  document.querySelectorAll('.tipo-btn').forEach(b => b.className='tipo-btn');
+  btn.className = 'tipo-btn ativo-' + t;
+  document.getElementById('lbl-valor').textContent =
+    t==='entrada' ? 'Valor Entrada (R$)' :
+    t==='saida'   ? 'Valor Saída (R$)' : 'Valor Depositado (R$)';
+}
+
+function addLancamento() {
+  const data  = document.getElementById('f-data').value;
+  const razao = document.getElementById('f-razao').value.trim();
+  const valor = parseFloat(document.getElementById('f-valor').value);
+  if (!data)             { toast('Informe a data.'); return; }
+  if (!razao)            { toast('Informe a descrição.'); return; }
+  if (!valor || valor<=0){ toast('Informe um valor válido.'); return; }
+
+  const md = getMesData();
+  md.lancamentos.push({ id: idCount++, data, razao, doc: document.getElementById('f-doc').value.trim(), obs: document.getElementById('f-obs').value.trim(), valor, tipo });
+  md.lancamentos.sort((a,b) => a.data.localeCompare(b.data) || a.id - b.id);
+  dados[chave(mesSelecionado)] = md;
+  salvarDados();
+
+  document.getElementById('f-razao').value = '';
+  document.getElementById('f-doc').value   = '';
+  document.getElementById('f-obs').value   = '';
+  document.getElementById('f-valor').value = '';
+  document.getElementById('f-razao').focus();
+
+  recalc(); renderTabela();
+  toast('Lançamento adicionado ✓');
+}
+
+function deletar(id) {
+  if (!confirm('Remover este lançamento?')) return;
+  const md = getMesData();
+  md.lancamentos = md.lancamentos.filter(l => l.id !== id);
+  dados[chave(mesSelecionado)] = md;
+  salvarDados(); recalc(); renderTabela();
+  toast('Lançamento removido.');
+}
+
+function renderTabela() {
+  const wrap = document.getElementById('tabela-wrap');
+  const lcs  = getMesData().lancamentos || [];
+  document.getElementById('count-label').textContent = lcs.length + ' registro' + (lcs.length!==1?'s':'');
+  if (lcs.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Nenhum lançamento ainda.<br>Use o formulário acima para começar.</div>';
+    return;
+  }
+  const si = parseFloat(document.getElementById('saldo-inicial').value) || 0;
+  let sc = si;
+  const rows = lcs.map(l => {
+    const e = l.tipo==='entrada'  ? l.valor : 0;
+    const s = l.tipo==='saida'    ? l.valor : 0;
+    const d = l.tipo==='deposito' ? l.valor : 0;
+    sc = parseFloat((sc + e - s - d).toFixed(2));
+    const badge = l.tipo==='entrada' ? '<span class="badge badge-e">Entrada</span>'
+      : l.tipo==='saida' ? '<span class="badge badge-s">Saída</span>'
+      : '<span class="badge badge-d">Depósito</span>';
+    const vCol = l.tipo==='entrada'
+      ? `<td class="v-e">${brl(l.valor)}</td><td class="td-m" style="text-align:right">—</td><td class="td-m" style="text-align:right">—</td>`
+      : l.tipo==='saida'
+        ? `<td class="td-m" style="text-align:right">—</td><td class="v-s">${brl(l.valor)}</td><td class="td-m" style="text-align:right">—</td>`
+        : `<td class="td-m" style="text-align:right">—</td><td class="td-m" style="text-align:right">—</td><td class="v-d">${brl(l.valor)}</td>`;
+    const sc_cor = sc>=0 ? 'color:var(--green)' : 'color:var(--red)';
+    return `<tr>
+      <td class="td-m">${l.data.split('-').reverse().join('/')}</td>
+      <td>${badge}</td>
+      <td style="font-weight:500">${l.razao}</td>
+      <td class="td-m">${l.doc||'—'}</td>
+      <td class="td-m">${l.obs||'—'}</td>
+      ${vCol}
+      <td class="v-sal" style="${sc_cor}">${brl(sc)}</td>
+      <td><button class="del-btn" onclick="deletar(${l.id})" title="Remover">✕</button></td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table><thead><tr>
+    <th>Data</th><th>Tipo</th><th>Descrição</th><th>Nº Doc</th><th>Observação</th>
+    <th style="text-align:right">Entrada</th><th style="text-align:right">Saída</th>
+    <th style="text-align:right">Depósito</th><th style="text-align:right">Saldo</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function exportarExcel() {
+  const md  = getMesData();
+  const lcs = md.lancamentos || [];
+  if (lcs.length === 0) { toast('Nenhum lançamento para exportar.'); return; }
+  const [ano, m] = mesSelecionado.split('-');
+  const hotel = document.getElementById('hotel-nome').value || 'Hotel';
+  const si = parseFloat(document.getElementById('saldo-inicial').value) || 0;
+  let ent=0, sai=0, dep=0;
+  lcs.forEach(l => {
+    if (l.tipo==='entrada') ent+=l.valor;
+    else if (l.tipo==='saida') sai+=l.valor;
+    else dep+=l.valor;
+  });
+  const saldoFinal = parseFloat((si+ent-sai-dep).toFixed(2));
+
+  const wb = XLSX.utils.book_new();
+  const nomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const nomeMes = nomes[parseInt(m)-1];
+
+  const aoa = [];
+  aoa.push([hotel.toUpperCase() + ' — CONTROLE DE CAIXA — ' + nomeMes.toUpperCase() + '/' + ano]);
+  aoa.push(['Saldo Inicial:', si, '', '', 'Total Entradas:', ent, 'Total Saídas:', sai, 'Total Depositado:', dep]);
+  aoa.push([]);
+  aoa.push(['DATA','TIPO','RAZÃO SOCIAL / DESCRIÇÃO','Nº DOCUMENTO','OBSERVAÇÃO','ENTRADA (R$)','SAÍDA (R$)','DEPÓSITO (R$)','SALDO (R$)']);
+
+  let sc = si;
+  lcs.forEach(l => {
+    const e = l.tipo==='entrada'  ? l.valor : '';
+    const s = l.tipo==='saida'    ? l.valor : '';
+    const d = l.tipo==='deposito' ? l.valor : '';
+    sc = parseFloat((sc + (e||0) - (s||0) - (d||0)).toFixed(2));
+    const tl = l.tipo==='entrada' ? 'Entrada' : l.tipo==='saida' ? 'Saída' : 'Depósito';
+    aoa.push([l.data.split('-').reverse().join('/'), tl, l.razao, l.doc||'', l.obs||'', e, s, d, sc]);
+  });
+
+  aoa.push([]);
+  aoa.push(['TOTAIS','','','','', parseFloat(ent.toFixed(2)), parseFloat(sai.toFixed(2)), parseFloat(dep.toFixed(2)), saldoFinal]);
+  aoa.push([]);
+  aoa.push(['SALDO FINAL EM CAIXA:','','','','','','','', saldoFinal]);
+  aoa.push([]);
+  aoa.push([]);
+  aoa.push(['Gerente Geral:','','','','Segunda Assinatura:']);
+  aoa.push(['_________________________','','','','_________________________']);
+  aoa.push(['Data: ___/___/______','','','','Data: ___/___/______']);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:12},{wch:10},{wch:30},{wch:14},{wch:28},{wch:14},{wch:14},{wch:14},{wch:14}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:8}}];
+  XLSX.utils.book_append_sheet(wb, ws, nomeMes+' '+ano);
+
+  const backupWs = XLSX.utils.aoa_to_sheet([['backup_json'], [JSON.stringify(dados)]]);
+  XLSX.utils.book_append_sheet(wb, backupWs, '_backup');
+
+  XLSX.writeFile(wb, `Caixa_${m}_${ano}.xlsx`);
+  toast('Excel exportado com sucesso ✓');
+}
+
+function importarBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const importado = JSON.parse(e.target.result);
+      if (confirm('Importar backup? Os dados atuais do mês serão substituídos.')) {
+        dados = { ...dados, ...importado };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+        trocarMes();
+        toast('Backup importado com sucesso ✓');
+      }
+    } catch(err) {
+      toast('Arquivo inválido. Use um .json exportado por este sistema.');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function exportarBackupJSON() {
+  const md = getMesData();
+  if (!md.lancamentos || md.lancamentos.length === 0) {
+    toast('Nenhum lançamento para salvar no backup.');
+    return;
+  }
+  const agora = new Date();
+  const dd   = String(agora.getDate()).padStart(2,'0');
+  const mm   = String(agora.getMonth()+1).padStart(2,'0');
+  const yyyy = agora.getFullYear();
+  const hh   = String(agora.getHours()).padStart(2,'0');
+  const min  = String(agora.getMinutes()).padStart(2,'0');
+  const nome = 'backup_caixa_' + dd + mm + yyyy + '_' + hh + min + '.json';
+  const blob = new Blob([JSON.stringify(dados, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  a.click();
+  toast('Backup salvo: ' + nome + ' ✓');
+}
+
+function limparMes() {
+  if (!confirm('Tem certeza? Todos os lançamentos de ' + mesSelecionado + ' serão removidos.')) return;
+  delete dados[chave(mesSelecionado)];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+  document.getElementById('saldo-inicial').value = 0;
+  recalc(); renderTabela();
+  toast('Mês limpo.');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+carregarDados();
+document.getElementById('f-data').value = new Date().toISOString().split('T')[0];
+trocarMes();
+</script>
+</body>
+</html>
